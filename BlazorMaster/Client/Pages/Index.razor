@@ -1,0 +1,152 @@
+﻿@page "/"
+
+@using BlazorMaster.Shared;
+@using BlazorMaster.Client.Servicio;
+
+@inject IProductoService productoServicio;
+@inject IVentaService ventaServicio;
+
+<div class="content">
+
+    <div class="row">
+        <div class="col-4">
+            <InputText class="form-control" placeholder="Nombre Cliente" @bind-Value="venta.Cliente"></InputText>
+        </div>
+    </div>
+
+    <hr />
+    <div class="row">
+        <div class="col-4">
+
+            <select class="form-select" value="@idProducto" @onchange="ProductoSeleccionado">
+                <option value="0">-- Seleccionar --</option>
+                @foreach(var item in listProducto)
+                {
+                    <option value="@item.IdProducto"> @item.Nombre </option>
+                }
+            </select>
+        </div>
+
+        <div class="col-2">
+            <InputNumber class="form-control" @bind-Value="precio"></InputNumber>
+        </div>
+
+        <div class="col-2">
+            <InputNumber class="form-control" @bind-Value="cantidad"></InputNumber>
+        </div>
+
+        <div class="col-2">
+            <button class="btn btn-primary" @onclick="AgregarProducto">Agregar</button>
+        </div>
+         <div class="col-2">
+            <button class="btn btn-success" @onclick="TerminarVenta">Terminar</button>
+        </div>
+
+
+    </div>
+    <hr />
+
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Producto</th>
+                <th>Precio</th>
+                <th>Cantidad</th>
+                <th>Sub Total</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach(var item in venta.DetalleVenta)
+            {
+                <tr>
+                    <td>@item.Producto.Nombre</td>
+                    <td>@item.Producto.Precio</td>
+                    <td>@item.Cantidad</td>
+                    <td>@item.SubTotal</td>
+                    <td>
+                        <button class="btn btn-sm btn-danger" 
+                        @onclick="@(() => EliminarProducto(item.Producto.IdProducto))">
+                            <span class="oi oi-trash"></span>
+                        </button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+</div>
+
+
+@code{
+    List<ProductoDTO> listProducto = new List<ProductoDTO>();
+    VentaDTO venta = new VentaDTO() { DetalleVenta = new List<DetalleVentaDTO>() };
+    int idProducto = 0;
+    int cantidad = 0;
+    decimal? precio = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        listProducto = await productoServicio.Lista();
+    }
+
+    public void ProductoSeleccionado(ChangeEventArgs e)
+    {
+        int _idProducto = Convert.ToInt32(e.Value.ToString());
+
+        if (_idProducto != 0)
+            precio = listProducto.Find(p => p.IdProducto == _idProducto)!.Precio;
+        else
+            precio = 0;
+
+        idProducto = _idProducto;
+        cantidad = 0;
+    }
+
+    private void AgregarProducto()
+    {
+        if (idProducto == 0)
+            return;
+        else if (venta.DetalleVenta.FirstOrDefault(p => p.Producto.IdProducto == idProducto) != null)
+            return;
+        else
+            venta.DetalleVenta.Add(new DetalleVentaDTO
+                {
+                    Producto = new ProductoDTO
+                    {
+                        IdProducto = idProducto,
+                        Nombre = listProducto.Find(p => p.IdProducto == idProducto)!.Nombre,
+                        Precio = listProducto.Find(p => p.IdProducto == idProducto)!.Precio
+                    },
+                    Cantidad = cantidad,
+                    SubTotal = precio * cantidad
+             });
+
+        idProducto = 0;
+        precio = 0;
+        cantidad = 0;
+
+    }
+
+    public void EliminarProducto(int id)
+    {
+        var producto = venta.DetalleVenta.First(p => p.Producto.IdProducto == id);
+
+        venta.DetalleVenta.Remove(producto);
+    }
+
+
+    public async Task TerminarVenta()
+    {
+        venta.Total = venta.DetalleVenta.Sum(p => p.SubTotal);
+        var result = await ventaServicio.Guardar(venta);
+
+        if(result)
+        {
+            venta.Cliente = "";
+            venta.DetalleVenta = new List<DetalleVentaDTO>();
+        }
+    }
+
+
+}
